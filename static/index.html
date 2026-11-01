@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AgriAI Assistant</title>
+
+  <style>
+    :root {
+      color-scheme: light;
+      --green: #176b3a;
+      --border: #d8dfd9;
+      --text: #1d2a21;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #f6f8f5;
+      color: var(--text);
+      font-family: system-ui, sans-serif;
+    }
+
+    main {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    h1 {
+      margin-bottom: 4px;
+      color: var(--green);
+    }
+
+    .subtitle {
+      margin-top: 0;
+      color: #5c685f;
+    }
+
+    form {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 12px;
+      padding: 18px;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-weight: 600;
+    }
+
+    input,
+    select,
+    textarea,
+    button {
+      font: inherit;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #aeb9b0;
+      border-radius: 6px;
+    }
+
+    textarea {
+      min-height: 110px;
+      resize: vertical;
+    }
+
+    .context {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .photos {
+      grid-column: 1 / -1;
+      padding: 14px;
+      border: 1px dashed #8fa295;
+      border-radius: 8px;
+      background: #f8fbf8;
+    }
+
+    .photos input {
+      padding: 8px;
+      background: white;
+    }
+
+    #previews {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    #previews img {
+      width: 130px;
+      height: 100px;
+      object-fit: cover;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+
+    button {
+      grid-column: 1 / -1;
+      padding: 11px 18px;
+      border: 0;
+      border-radius: 6px;
+      background: var(--green);
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    #result {
+      margin-top: 20px;
+      padding: 20px;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      white-space: pre-wrap;
+      line-height: 1.55;
+    }
+
+    .warning {
+      margin-top: 16px;
+      padding: 14px;
+      background: #fff4ce;
+      border-left: 5px solid #d99700;
+    }
+
+    .critical {
+      background: #ffe5e1;
+      border-left-color: #c52d1d;
+    }
+
+    @media (max-width: 700px) {
+      form,
+      .context {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+<main>
+  <h1>AgriAI Assistant</h1>
+  <p class="subtitle">
+    Analyze farm questions and photographs
+  </p>
+
+  <form id="chat-form">
+    <label>
+      Domain
+      <select id="domain">
+        <option value="general">General</option>
+        <option value="crop_management">Crop management</option>
+        <option value="livestock">Livestock</option>
+        <option value="vision">Photo analysis</option>
+        <option value="soil_water">Soil and water</option>
+        <option value="pest_disease">Pest and disease</option>
+        <option value="market">Market</option>
+        <option value="weather">Weather</option>
+        <option value="farm_business">Farm business</option>
+        <option value="sustainability">Sustainability</option>
+      </select>
+    </label>
+
+    <label>
+      Question
+      <textarea
+        id="message"
+        required
+        placeholder="Describe the problem or ask what to check..."
+      ></textarea>
+    </label>
+
+    <div class="context">
+      <label>
+        Crop
+        <input id="crop" placeholder="Tomato" />
+      </label>
+
+      <label>
+        Growth stage
+        <input id="growth-stage" placeholder="Flowering" />
+      </label>
+
+      <label>
+        Location
+        <input id="location" placeholder="Nairobi, Kenya" />
+      </label>
+
+      <label>
+        Soil type
+        <input id="soil-type" placeholder="Sandy loam" />
+      </label>
+    </div>
+
+    <div class="photos">
+      <label for="photo-input">
+        Farm photos
+        <input
+          id="photo-input"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+        />
+      </label>
+
+      <small>
+        Upload up to four JPEG, PNG, or WEBP images.
+        Maximum 10 MB per image.
+      </small>
+
+      <div id="previews"></div>
+    </div>
+
+    <button id="submit" type="submit">Analyze</button>
+  </form>
+
+  <div id="result">Enter a question or upload a photo to begin.</div>
+</main>
+
+<script>
+  const form = document.querySelector("#chat-form");
+  const result = document.querySelector("#result");
+  const submit = document.querySelector("#submit");
+  const photoInput = document.querySelector("#photo-input");
+  const previews = document.querySelector("#previews");
+
+  function value(id) {
+    return document.querySelector(`#${id}`).value.trim();
+  }
+
+  photoInput.addEventListener("change", () => {
+    previews.innerHTML = "";
+
+    for (const file of photoInput.files) {
+      if (!file.type.startsWith("image/")) continue;
+
+      const image = document.createElement("img");
+      image.src = URL.createObjectURL(file);
+      image.onload = () => URL.revokeObjectURL(image.src);
+      previews.appendChild(image);
+    }
+  });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    submit.disabled = true;
+    result.textContent = "Analyzing the farm question and photos...";
+
+    const formData = new FormData();
+
+    formData.append("message", value("message"));
+    formData.append("domain", value("domain"));
+    formData.append("crop", value("crop"));
+    formData.append("growth_stage", value("growth-stage"));
+    formData.append("location", value("location"));
+    formData.append("soil_type", value("soil-type"));
+
+    for (const file of photoInput.files) {
+      formData.append("photos", file);
+    }
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Request failed");
+      }
+
+      const findings = (data.safety_findings || [])
+        .map(
+          (item) =>
+            `<div class="warning ${item.severity}">` +
+            `<strong>${item.category.toUpperCase()}</strong>
+` +
+            `${item.message}</div>`
+        )
+        .join("");
+
+      result.innerHTML =
+        `<div><strong>Mode:</strong> ${data.mode}</div>` +
+        findings +
+        `<div>${data.answer}</div>`;
+    } catch (error) {
+      result.textContent = `Error: ${error.message}`;
+    } finally {
+      submit.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>
